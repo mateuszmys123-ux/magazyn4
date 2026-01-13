@@ -2,7 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 
-# Inicjalizacja połączenia z Supabase
+# Inicjalizacja połączenia z Supabase przy użyciu Secrets
 @st.cache_resource
 def init_connection():
     url = st.secrets["SUPABASE_URL"]
@@ -11,13 +11,13 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-st.set_page_config(page_title="Supabase Manager", layout="centered")
-st.title("📂 Zarządzanie Kategoriami Produktów")
+st.set_page_config(page_title="Supabase Category Manager", layout="centered")
+st.title("📂 Zarządzanie Kategoriami")
 
-# --- SEKCJA: DODAWANIE ---
+# --- SEKCJA: DODAWANIE KATEGORII ---
 st.header("Dodaj nową kategorię")
 with st.form("add_category_form", clear_on_submit=True):
-    # Pola zgodne ze schematem z rysunku
+    # Nazwy pól zgodne z kolumnami w Twojej bazie danych
     nazwa = st.text_input("Nazwa kategorii (kolumna: kategorie)")
     opis = st.text_area("Opis (kolumna: opis)")
     submit = st.form_submit_button("Dodaj do bazy")
@@ -25,52 +25,52 @@ with st.form("add_category_form", clear_on_submit=True):
     if submit:
         if nazwa:
             try:
-                # POPRAWIONA LINIA 39: Poprawne wywołanie insert dla Supabase
+                # Linia 41: Poprawne wykonanie zapisu i natychmiastowe odświeżenie danych
                 supabase.table("kategorie").insert({
                     "kategorie": nazwa, 
                     "opis": opis
                 }).execute()
                 
-                st.success(f"Pomyślnie dodano kategorię: {nazwa}")
-                st.rerun()
+                st.success(f"Dodano kategorię: {nazwa}")
+                st.rerun()  # Wymuszenie odświeżenia, aby nowa kategoria pojawiła się na liście
             except Exception as e:
-                st.error(f"Błąd podczas dodawania: {e}")
+                st.error(f"Wystąpił błąd podczas zapisu: {e}")
         else:
-            st.warning("Pole 'Nazwa kategorii' jest wymagane.")
+            st.warning("Musisz podać nazwę kategorii.")
 
 ---
 
-# --- SEKCJA: LISTA I USUWANIE ---
-st.header("Aktualne kategorie")
+# --- SEKCJA: WYŚWIETLANIE I USUWANIE ---
+st.header("Aktualna lista kategorii")
 
 try:
-    # Pobieranie danych z Supabase
+    # Pobranie wszystkich kategorii
     response = supabase.table("kategorie").select("*").execute()
     categories = response.data
 
     if categories:
-        # Konwersja do DataFrame dla ładnego wyświetlania
+        # Prezentacja danych w tabeli
         df = pd.DataFrame(categories)
-        st.dataframe(df, use_container_width=True)
+        st.dataframe(df[["id", "kategorie", "opis"]], use_container_width=True)
 
         st.subheader("Usuń kategorię")
-        # Menu wyboru kategorii do usunięcia
-        option = st.selectbox(
+        # Wybór rekordu do usunięcia
+        selected_cat = st.selectbox(
             "Wybierz kategorię do usunięcia:",
             options=categories,
-            format_func=lambda x: f"ID: {x['id']} | Nazwa: {x['kategorie']}"
+            format_func=lambda x: f"ID: {x['id']} | {x['kategorie']}"
         )
 
-        if st.button("Usuń wybraną kategorię", type="primary"):
+        if st.button("Usuń trwale", type="primary"):
             try:
-                # Usuwanie rekordu na podstawie ID
-                supabase.table("kategorie").delete().eq("id", option['id']).execute()
-                st.success(f"Kategoria '{option['kategorie']}' została usunięta.")
+                # Usuwanie na podstawie klucza głównego 'id'
+                supabase.table("kategorie").delete().eq("id", selected_cat['id']).execute()
+                st.success("Kategoria została usunięta.")
                 st.rerun()
             except Exception as e:
-                st.error(f"Nie można usunąć kategorii. Może być powiązana z produktami. Błąd: {e}")
+                st.error(f"Błąd: Nie można usunąć kategorii, jeśli są do niej przypisane produkty. {e}")
     else:
-        st.info("Baza danych kategorii jest obecnie pusta.")
+        st.info("Brak kategorii w bazie.")
 
 except Exception as e:
-    st.error(f"Błąd połączenia z API Supabase: {e}")
+    st.error(f"Problem z połączeniem: {e}")
