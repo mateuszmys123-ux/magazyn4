@@ -11,63 +11,66 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-st.title("Zarządzanie Kategoriami (Supabase)")
+st.set_page_config(page_title="Supabase Manager", layout="centered")
+st.title("📂 Zarządzanie Kategoriami Produktów")
 
 # --- SEKCJA: DODAWANIE ---
 st.header("Dodaj nową kategorię")
 with st.form("add_category_form", clear_on_submit=True):
-    # Pola zgodne ze schematem: 'kategorie' (wymagane) i 'opis' (opcjonalne)
-    nazwa = st.text_input("Nazwa kategorii")
-    opis = st.text_area("Opis")
-    submit = st.form_submit_button("Dodaj")
+    # Pola zgodne ze schematem z rysunku
+    nazwa = st.text_input("Nazwa kategorii (kolumna: kategorie)")
+    opis = st.text_area("Opis (kolumna: opis)")
+    submit = st.form_submit_button("Dodaj do bazy")
 
     if submit:
         if nazwa:
             try:
-                # Wstawianie danych do tabeli 'kategorie'
-                data, count = supabase.table("kategorie").insert({
+                # POPRAWIONA LINIA 39: Poprawne wywołanie insert dla Supabase
+                supabase.table("kategorie").insert({
                     "kategorie": nazwa, 
                     "opis": opis
                 }).execute()
-                st.success(f"Dodano kategorię: {nazwa}")
+                
+                st.success(f"Pomyślnie dodano kategorię: {nazwa}")
                 st.rerun()
             except Exception as e:
                 st.error(f"Błąd podczas dodawania: {e}")
         else:
-            st.warning("Nazwa kategorii jest wymagana.")
+            st.warning("Pole 'Nazwa kategorii' jest wymagane.")
 
 ---
 
 # --- SEKCJA: LISTA I USUWANIE ---
-st.header("Lista kategorii")
+st.header("Aktualne kategorie")
 
 try:
-    # Pobieranie kategorii ze schematu
+    # Pobieranie danych z Supabase
     response = supabase.table("kategorie").select("*").execute()
     categories = response.data
 
     if categories:
+        # Konwersja do DataFrame dla ładnego wyświetlania
         df = pd.DataFrame(categories)
         st.dataframe(df, use_container_width=True)
 
         st.subheader("Usuń kategorię")
-        # Tworzymy listę do wyboru dla użytkownika
+        # Menu wyboru kategorii do usunięcia
         option = st.selectbox(
             "Wybierz kategorię do usunięcia:",
             options=categories,
-            format_func=lambda x: f"ID: {x['id']} | {x['kategorie']}"
+            format_func=lambda x: f"ID: {x['id']} | Nazwa: {x['kategorie']}"
         )
 
-        if st.button("Usuń", type="primary"):
+        if st.button("Usuń wybraną kategorię", type="primary"):
             try:
-                # Usuwanie po ID
+                # Usuwanie rekordu na podstawie ID
                 supabase.table("kategorie").delete().eq("id", option['id']).execute()
-                st.success("Kategoria została usunięta!")
+                st.success(f"Kategoria '{option['kategorie']}' została usunięta.")
                 st.rerun()
             except Exception as e:
-                st.error(f"Nie można usunąć kategorii. Upewnij się, że nie jest przypisana do produktów. Błąd: {e}")
+                st.error(f"Nie można usunąć kategorii. Może być powiązana z produktami. Błąd: {e}")
     else:
-        st.info("Brak kategorii w bazie danych.")
+        st.info("Baza danych kategorii jest obecnie pusta.")
 
 except Exception as e:
-    st.error(f"Błąd połączenia: {e}")
+    st.error(f"Błąd połączenia z API Supabase: {e}")
