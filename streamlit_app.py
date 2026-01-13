@@ -16,33 +16,30 @@ st.title("Zarządzanie Kategoriami")
 # --- SEKCJA DODAWANIA ---
 st.header("Dodaj nową kategorię")
 with st.form("category_form", clear_on_submit=True):
+    # Pola zgodne ze schematem: 'kategorie' i 'opis'
     nazwa_kat = st.text_input("Nazwa kategorii")
     opis_kat = st.text_area("Opis")
     submitted = st.form_submit_button("Zapisz")
 
-    success = False
     if submitted:
         if nazwa_kat:
             try:
-                # Wykonanie zapisu
+                # Wykonanie operacji bez st.rerun wewnątrz try/except
                 supabase.table("kategorie").insert({
                     "kategorie": nazwa_kat, 
                     "opis": opis_kat
                 }).execute()
-                success = True
+                st.success(f"Dodano: {nazwa_kat}. Lista zostanie zaktualizowana.")
+                # Zamiast rerun, używamy flagi do odświeżenia poza tym blokiem
+                st.session_state['needs_refresh'] = True
             except Exception as e:
                 st.error(f"Błąd bazy danych: {e}")
         else:
             st.warning("Nazwa jest wymagana.")
 
-# Kluczowa zmiana: st.rerun() musi być POZA blokiem try/except formularza
-if success:
-    st.success(f"Dodano: {nazwa_kat}")
-    st.rerun()
-
 ---
 
-# --- SEKCJA LISTA I USUWANIE ---
+# --- SEKCJA LISTY I USUWANIE ---
 st.header("Lista kategorii")
 
 try:
@@ -58,25 +55,23 @@ try:
         to_delete = st.selectbox(
             "Wybierz do usunięcia", 
             options=items, 
-            key="delete_box",
             format_func=lambda x: f"ID: {x['id']} | {x['kategorie']}"
         )
 
-        delete_clicked = st.button("Usuń", type="primary")
-        
-        delete_success = False
-        if delete_clicked:
+        if st.button("Usuń zaznaczoną kategorię", type="primary"):
             try:
                 supabase.table("kategorie").delete().eq("id", to_delete['id']).execute()
-                delete_success = True
+                st.info("Usunięto. Kliknij przycisk poniżej, aby odświeżyć.")
+                st.session_state['needs_refresh'] = True
             except Exception as e:
-                st.error(f"Nie można usunąć (prawdopodobnie kategoria ma produkty): {e}")
-        
-        # Odświeżenie po usunięciu (również poza try/except)
-        if delete_success:
-            st.rerun()
-            
+                st.error(f"Błąd: Kategoria może być przypisana do produktu. {e}")
     else:
-        st.info("Brak danych.")
+        st.info("Baza jest pusta.")
+
 except Exception as e:
-    st.error(f"Błąd ładowania danych: {e}")
+    st.error(f"Błąd ładowania: {e}")
+
+# JEDYNE MIEJSCE NA ODŚWIEŻENIE - POZA WSZYSTKIMI BLOKAMI TRY
+if st.session_state.get('needs_refresh'):
+    st.session_state['needs_refresh'] = False
+    st.rerun()
