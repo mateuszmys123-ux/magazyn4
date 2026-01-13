@@ -2,7 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 
-# Inicjalizacja klienta Supabase
+# Połączenie z Supabase przy użyciu Secrets
 @st.cache_resource
 def init_connection():
     url = st.secrets["SUPABASE_URL"]
@@ -11,67 +11,63 @@ def init_connection():
 
 supabase: Client = init_connection()
 
-st.title("Zarządzanie Kategoriami Supabase")
+st.title("Zarządzanie Kategoriami")
 
-# --- SEKCJA DODAWANIA ---
+# --- SEKCJA DODAWANIE ---
 st.header("Dodaj nową kategorię")
-
-# Formularz do dodawania danych
 with st.form("category_form", clear_on_submit=True):
-    # Nazwy kolumn muszą być identyczne jak na Twoim schemacie: 'kategorie' i 'opis'
-    nazwa_input = st.text_input("Nazwa kategorii")
-    opis_input = st.text_area("Opis")
-    submit_button = st.form_submit_button("Dodaj kategorię")
+    # Nazwy pól muszą pasować do bazy: 'kategorie' i 'opis'
+    nazwa_kat = st.text_input("Nazwa kategorii")
+    opis_kat = st.text_area("Opis")
+    submitted = st.form_submit_button("Zapisz")
 
-    if submit_button:
-        if nazwa_input:
+    if submitted:
+        if nazwa_kat:
             try:
-                # LINIA 37 (poprawiona): Przekazanie słownika i wywołanie .execute()
-                # Brak st.rerun() bezpośrednio tutaj zapobiega błędom przepływu
-                query = supabase.table("kategorie").insert({
-                    "kategorie": nazwa_input, 
-                    "opis": opis_input
+                # Wykonanie zapisu bez przypisywania do zmiennej, aby uniknąć błędów typu 'NoneType'
+                supabase.table("kategorie").insert({
+                    "kategorie": nazwa_kat, 
+                    "opis": opis_kat
                 }).execute()
                 
-                st.success(f"Dodano: {nazwa_input}")
-                # Zamiast st.rerun(), używamy mechanizmu powiadomienia użytkownika 
-                # lub przycisku odświeżającego poniżej
+                st.success(f"Dodano: {nazwa_kat}. Odśwież stronę, aby zobaczyć zmiany.")
             except Exception as e:
-                st.error(f"Błąd bazy danych: {e}")
+                st.error(f"Błąd zapisu w linii 37-44: {e}")
         else:
-            st.warning("Pole 'Nazwa kategorii' jest wymagane.")
+            st.warning("Nazwa jest wymagana.")
 
 ---
 
-# --- SEKCJA LISTY I USUWANIA ---
-st.header("Aktualne kategorie")
+# --- SEKCJA LISTA I USUWANIE ---
+st.header("Lista kategorii")
 
 try:
-    # Pobieranie danych z tabeli 'kategorie'
+    # Pobieranie rekordów
     response = supabase.table("kategorie").select("*").execute()
-    data = response.data
+    items = response.data
 
-    if data:
-        df = pd.DataFrame(data)
+    if items:
+        df = pd.DataFrame(items)
         st.dataframe(df[["id", "kategorie", "opis"]], use_container_width=True)
 
         st.subheader("Usuń kategorię")
-        selected_item = st.selectbox(
-            "Wybierz element do usunięcia",
-            options=data,
+        # x['id'] to bigint z Twojego schematu
+        to_delete = st.selectbox(
+            "Wybierz do usunięcia", 
+            options=items, 
             format_func=lambda x: f"ID: {x['id']} | {x['kategorie']}"
         )
 
-        if st.button("Usuń zaznaczone", type="primary"):
+        if st.button("Usuń", type="primary"):
             try:
                 # Usuwanie po ID
-                supabase.table("kategorie").delete().eq("id", selected_item['id']).execute()
-                st.success("Usunięto pomyślnie!")
-                st.rerun() # Tu st.rerun jest bezpieczniejszy (poza st.form)
+                supabase.table("kategorie").delete().eq("id", to_delete['id']).execute()
+                st.success("Usunięto!")
+                st.rerun() 
             except Exception as e:
-                st.error(f"Błąd usuwania (sprawdź czy kategoria nie ma przypisanych produktów): {e}")
+                st.error(f"Nie można usunąć – kategoria może być używana w produktach. Błąd: {e}")
     else:
-        st.info("Baza danych jest pusta.")
+        st.info("Brak danych w tabeli.")
 
 except Exception as e:
     st.error(f"Błąd połączenia: {e}")
