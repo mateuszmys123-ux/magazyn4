@@ -2,7 +2,7 @@ import streamlit as st
 from supabase import create_client, Client
 import pandas as pd
 
-# Inicjalizacja połączenia
+# Połączenie z Supabase
 @st.cache_resource
 def init_connection():
     url = st.secrets["SUPABASE_URL"]
@@ -16,34 +16,33 @@ st.title("Zarządzanie Kategoriami")
 # --- SEKCJA DODAWANIA ---
 st.header("Dodaj nową kategorię")
 with st.form("category_form", clear_on_submit=True):
-    # Pola zgodne ze schematem: 'kategorie' i 'opis'
-    nazwa_kat = st.text_input("Nazwa kategorii")
-    opis_kat = st.text_area("Opis")
-    submitted = st.form_submit_button("Zapisz")
+    # Kolumny zgodne ze schematem: 'kategorie' i 'opis'
+    nazwa_input = st.text_input("Nazwa kategorii")
+    opis_input = st.text_area("Opis")
+    submitted = st.form_submit_button("Dodaj")
 
     if submitted:
-        if nazwa_kat:
+        if nazwa_input:
             try:
-                # Wykonanie operacji bez st.rerun wewnątrz try/except
+                # Wstawianie danych do tabeli 'kategorie'
                 supabase.table("kategorie").insert({
-                    "kategorie": nazwa_kat, 
-                    "opis": opis_kat
+                    "kategorie": nazwa_input, 
+                    "opis": opis_input
                 }).execute()
-                st.success(f"Dodano: {nazwa_kat}. Lista zostanie zaktualizowana.")
-                # Zamiast rerun, używamy flagi do odświeżenia poza tym blokiem
-                st.session_state['needs_refresh'] = True
+                st.success(f"Dodano: {nazwa_input}. Dane pojawią się na liście poniżej.")
+                # USUNIĘTO st.rerun() - to eliminuje błąd w linii 40
             except Exception as e:
                 st.error(f"Błąd bazy danych: {e}")
         else:
-            st.warning("Nazwa jest wymagana.")
+            st.warning("Proszę podać nazwę.")
 
 ---
 
-# --- SEKCJA LISTY I USUWANIE ---
+# --- SEKCJA LISTY I USUWANIA ---
 st.header("Lista kategorii")
 
 try:
-    # Pobieranie danych
+    # Pobieranie rekordów z bazy
     response = supabase.table("kategorie").select("*").execute()
     items = response.data
 
@@ -58,20 +57,16 @@ try:
             format_func=lambda x: f"ID: {x['id']} | {x['kategorie']}"
         )
 
-        if st.button("Usuń zaznaczoną kategorię", type="primary"):
+        if st.button("Usuń", type="primary"):
             try:
+                # Usuwanie po kluczu głównym 'id'
                 supabase.table("kategorie").delete().eq("id", to_delete['id']).execute()
-                st.info("Usunięto. Kliknij przycisk poniżej, aby odświeżyć.")
-                st.session_state['needs_refresh'] = True
+                st.info("Usunięto pomyślnie.")
+                # Tutaj też nie używamy rerun, aby uniknąć błędów
             except Exception as e:
-                st.error(f"Błąd: Kategoria może być przypisana do produktu. {e}")
+                st.error(f"Błąd: Nie można usunąć (może kategoria ma produkty?). {e}")
     else:
-        st.info("Baza jest pusta.")
+        st.info("Baza danych jest pusta.")
 
 except Exception as e:
-    st.error(f"Błąd ładowania: {e}")
-
-# JEDYNE MIEJSCE NA ODŚWIEŻENIE - POZA WSZYSTKIMI BLOKAMI TRY
-if st.session_state.get('needs_refresh'):
-    st.session_state['needs_refresh'] = False
-    st.rerun()
+    st.error(f"Problem z połączeniem: {e}")
