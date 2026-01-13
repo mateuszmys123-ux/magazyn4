@@ -36,7 +36,6 @@ with st.form("category_form", clear_on_submit=True):
         else:
             st.warning("Proszę podać nazwę.")
 
----
 
 # --- SEKCJA LISTY I USUWANIA ---
 st.header("Lista kategorii")
